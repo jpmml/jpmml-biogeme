@@ -18,7 +18,6 @@
  */
 package biogeme.expressions;
 
-import org.dmg.pmml.PMMLFunctions;
 import org.jpmml.converter.ExpressionUtil;
 
 abstract
@@ -38,13 +37,9 @@ public class ComparisonExpression extends BinaryExpression {
 		Expression left = getLeft();
 		Expression right = getRight();
 
-		return ExpressionUtil.createApply(PMMLFunctions.IF,
-			ExpressionUtil.createApply(pmmlFunction,
-				left.toPMML(),
-				right.toPMML()
-			),
-			ExpressionUtil.createConstant(1d),
-			ExpressionUtil.createConstant(0d)
+		return 	ExpressionUtil.createApply(pmmlFunction,
+			left.toPMML(),
+			right.toPMML()
 		);
 	}
 }

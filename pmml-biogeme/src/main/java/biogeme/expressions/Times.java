@@ -19,6 +19,7 @@
 package biogeme.expressions;
 
 import org.dmg.pmml.PMMLFunctions;
+import org.jpmml.converter.ExpressionUtil;
 
 public class Times extends ArithmeticExpression {
 
@@ -36,26 +37,57 @@ public class Times extends ArithmeticExpression {
 		Expression left = getLeft();
 		Expression right = getRight();
 
-		if(isEnabled(left) && !isEnabled(right)){
-			return left.toPMML();
-		} else
+		org.dmg.pmml.Expression result;
 
-		if(!isEnabled(left) && isEnabled(right)){
-			return right.toPMML();
+		result = toPMML(left, right);
+		if(result != null){
+			return result;
+		}
+
+		result = toPMML(right, left);
+		if(result != null){
+			return result;
 		}
 
 		return super.toPMML();
 	}
 
 	static
-	private boolean isEnabled(Expression expression){
+	private org.dmg.pmml.Expression toPMML(Expression left, Expression right){
 
-		if(expression instanceof Beta){
-			Beta beta = (Beta)expression;
+		if(left instanceof Beta){
+			Beta beta = (Beta)left;
 
-			return beta.getEnabled();
+			if(!beta.getEnabled()){
+				return right.toPMML();
+			}
+
+			return null;
+		} else
+
+		if(left instanceof ComparisonExpression){
+
+			if(right instanceof ComparisonExpression){
+
+				return ExpressionUtil.createApply(PMMLFunctions.IF,
+					ExpressionUtil.createApply(PMMLFunctions.AND,
+						left.toPMML(),
+						right.toPMML()
+					),
+					ExpressionUtil.createConstant(1d),
+					ExpressionUtil.createConstant(0d)
+				);
+			} else
+
+			{
+				return ExpressionUtil.createApply(PMMLFunctions.IF,
+					left.toPMML(),
+					right.toPMML(),
+					ExpressionUtil.createConstant(0d)
+				);
+			}
 		}
 
-		return true;
+		return null;
 	}
 }
