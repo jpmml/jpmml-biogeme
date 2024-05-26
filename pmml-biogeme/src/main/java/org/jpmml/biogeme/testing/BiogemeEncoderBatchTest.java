@@ -29,7 +29,7 @@ abstract
 public class BiogemeEncoderBatchTest extends PythonEncoderBatchTest {
 
 	public BiogemeEncoderBatchTest(){
-		super(new PMMLEquivalence(1e-13, 1e-13));
+		super(new PMMLEquivalence(1e-14, 1e-14));
 	}
 
 	@Override

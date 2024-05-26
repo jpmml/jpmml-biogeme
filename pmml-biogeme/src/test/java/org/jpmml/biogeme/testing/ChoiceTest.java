@@ -24,6 +24,6 @@ public class ChoiceTest extends BiogemeEncoderBatchTest {
 
 	@Test
 	public void evaluateMNLOptima() throws Exception {
-		evaluate("MNL", "Optima", excludeFields("Choice"));
+		evaluate("MNL", "Optima");
 	}
 }
