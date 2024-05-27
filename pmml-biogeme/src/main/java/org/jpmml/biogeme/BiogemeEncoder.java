@@ -18,10 +18,30 @@
  */
 package org.jpmml.biogeme;
 
+import java.util.Arrays;
+import java.util.List;
+
+import org.dmg.pmml.DataField;
+import org.dmg.pmml.DataType;
+import org.dmg.pmml.OpType;
+import org.jpmml.converter.TypeUtil;
 import org.jpmml.python.PickleUtil;
 import org.jpmml.python.PythonEncoder;
 
 public class BiogemeEncoder extends PythonEncoder {
+
+	public BiogemeEncoder(){
+	}
+
+	public DataField createChoiceField(String name, List<?> values){
+		DataType dataType = TypeUtil.getDataType(values, DataType.STRING);
+
+		return createDataField(name, OpType.CATEGORICAL, dataType, values);
+	}
+
+	public DataField createAvailabilityField(String name){
+		return createDataField(name, OpType.CONTINUOUS, DataType.INTEGER, Arrays.asList(0, 1));
+	}
 
 	static {
 		ClassLoader clazzLoader = BiogemeEncoder.class.getClassLoader();

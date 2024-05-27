@@ -1,4 +1,5 @@
 from biogeme.biogeme import BIOGEME
+from biogeme.expressions import Numeric, Variable
 from biogeme.models import logit, loglogit
 from pandas import DataFrame
 
@@ -14,10 +15,11 @@ V, _, Choice, _ = scenario()
 # Preserve the initial state of the utility function set for DCM pickling purposes
 V_orig = copy.deepcopy(V)
 
-def store_dcm(betas, name):
+def store_dcm(V, betas, availability, name):
 	dcm = {
-		"V" : V_orig,
-		"betas" : betas
+		"V" : V,
+		"betas" : betas,
+		"availability" : availability
 	}
 
 	joblib.dump(dcm, "pkl/" + name + ".pkl")
@@ -35,7 +37,7 @@ def estimate(model_func, name):
 
 	return results.getBetaValues()
 
-def predict(proba_func, betas, name):
+def predict(proba_func, betas):
 	prediction = DataFrame()
 
 	choices = list(V.keys())
@@ -52,8 +54,21 @@ def predict(proba_func, betas, name):
 
 	return prediction
 
-betas = estimate(lambda: loglogit(V, None, Choice), "MNLOptima")
-store_dcm(betas, "MNLOptima")
+availability = None
 
-prediction = predict(lambda x: logit(V, None, x), betas, "MNLOptima")
+betas = estimate(lambda: loglogit(V, availability, Choice), "MNLOptima")
+store_dcm(V_orig, betas, availability, "MNLOptima")
+
+prediction = predict(lambda x: logit(V, availability, x), betas)
 store_csv(prediction, "MNLOptima")
+
+availability = {
+	0 : Numeric(1),
+	1 : Variable("AV_CAR"),
+	2 : Numeric(1)
+}
+
+store_dcm(V_orig, betas, availability, "MNLAvOptima")
+
+prediction = predict(lambda x: logit(V, availability, x), betas)
+store_csv(prediction, "MNLAvOptima")

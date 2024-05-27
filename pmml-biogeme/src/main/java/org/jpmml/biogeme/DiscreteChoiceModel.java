@@ -19,33 +19,44 @@
 package org.jpmml.biogeme;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import biogeme.expressions.Beta;
 import biogeme.expressions.Expression;
+import biogeme.expressions.Numeric;
 import biogeme.expressions.Plus;
 import biogeme.expressions.Times;
 import biogeme.expressions.Variable;
+import com.google.common.collect.Iterables;
 import org.dmg.pmml.DataField;
 import org.dmg.pmml.DataType;
 import org.dmg.pmml.DerivedField;
 import org.dmg.pmml.Field;
 import org.dmg.pmml.FieldRef;
 import org.dmg.pmml.MiningFunction;
+import org.dmg.pmml.Model;
 import org.dmg.pmml.OpType;
+import org.dmg.pmml.Output;
+import org.dmg.pmml.OutputField;
 import org.dmg.pmml.PMML;
+import org.dmg.pmml.mining.MiningModel;
+import org.dmg.pmml.mining.Segmentation;
 import org.dmg.pmml.regression.RegressionModel;
 import org.dmg.pmml.regression.RegressionTable;
 import org.jpmml.converter.CategoricalLabel;
 import org.jpmml.converter.ContinuousFeature;
 import org.jpmml.converter.Feature;
 import org.jpmml.converter.FieldNameUtil;
+import org.jpmml.converter.InteractionFeature;
 import org.jpmml.converter.ModelUtil;
+import org.jpmml.converter.mining.MiningModelUtil;
 import org.jpmml.converter.regression.RegressionModelUtil;
+import org.jpmml.converter.transformations.ExpTransformation;
 import org.jpmml.python.PythonObject;
 
 public class DiscreteChoiceModel extends PythonObject {
@@ -57,20 +68,74 @@ public class DiscreteChoiceModel extends PythonObject {
 	public PMML encodePMML(BiogemeEncoder encoder){
 		Map<?, ?> V = getV();
 		Map<?, ?> betas = getBetas();
+		Map<?, ?> availability = getAvailability();
+
+		if(availability != null){
+
+			if(!Objects.equals(V.keySet(), availability.keySet())){
+				throw new IllegalArgumentException();
+			}
+		}
 
 		List<Object> choices = new ArrayList<>(V.keySet());
 
-		DataField dataField = encoder.createDataField("Choice", OpType.CATEGORICAL, DataType.STRING, choices);
+		DataField choiceField = encoder.createChoiceField("Choice", choices);
 
-		CategoricalLabel categoricalLabel = new CategoricalLabel(dataField);
+		if(availability != null){
+			(availability.values()).stream()
+				.forEach((value) -> {
 
-		List<RegressionTable> regressionTables = encodeUtilityFunctionSet(V, betas, encoder);
+					if(value instanceof Variable){
+						Variable variable = (Variable)value;
+
+						String name = variable.getName();
+
+						encoder.createAvailabilityField(name);
+					}
+				});
+		}
+
+		CategoricalLabel categoricalLabel = new CategoricalLabel(choiceField);
+
+		List<Model> models = new ArrayList<>();
+
+		List<RegressionTable> regressionTables = new ArrayList<>();
+
+		for(Object choice : choices){
+			Expression utilityFunctionExpr = (Expression)V.get(choice);
+
+			Model model = encodeUtilityFunction(choice, utilityFunctionExpr, betas, encoder);
+
+			models.add(model);
+
+			Feature feature = getPredictionFeature(model, encoder);
+
+			if(availability != null){
+				Expression availabilityExpr = (Expression)availability.get(choice);
+
+				Field<?> availabilityField = encodeAvailability(choice, availabilityExpr, encoder);
+				if(availabilityField != null){
+					Feature availabilityFeature = new ContinuousFeature(encoder, availabilityField);
+
+					feature = new InteractionFeature(encoder, FieldNameUtil.create("interaction", availabilityFeature, feature), DataType.DOUBLE, Arrays.asList(availabilityFeature, feature));
+				}
+			}
+
+			RegressionTable regressionTable = RegressionModelUtil.createRegressionTable(Collections.singletonList(feature), Collections.singletonList(1d), null)
+				.setTargetCategory(choice);
+
+			regressionTables.add(regressionTable);
+		}
 
 		RegressionModel regressionModel = new RegressionModel(MiningFunction.CLASSIFICATION, ModelUtil.createMiningSchema(categoricalLabel), regressionTables)
-			.setNormalizationMethod(RegressionModel.NormalizationMethod.SOFTMAX)
+			.setNormalizationMethod(RegressionModel.NormalizationMethod.SIMPLEMAX)
 			.setOutput(ModelUtil.createProbabilityOutput(DataType.DOUBLE, categoricalLabel));
 
-		return encoder.encodePMML(regressionModel);
+		models.add(regressionModel);
+
+		MiningModel miningModel = MiningModelUtil.createModelChain(models, Segmentation.MissingPredictionTreatment.RETURN_MISSING);
+
+		return encoder.encodePMML(miningModel);
 	}
 
 	public Map<?, ?> getV(){
@@ -81,15 +146,12 @@ public class DiscreteChoiceModel extends PythonObject {
 		return getDict("betas");
 	}
 
-	static
-	public List<RegressionTable> encodeUtilityFunctionSet(Map<?, ?> V, Map<?, ?> betas, BiogemeEncoder encoder){
-		return (V.entrySet()).stream()
-			.map(entry -> encodeUtilityFunction(entry.getKey(), (Expression)entry.getValue(), betas, encoder))
-			.collect(Collectors.toList());
+	public Map<?, ?> getAvailability(){
+		return getOptionalDict("availability");
 	}
 
 	static
-	private RegressionTable encodeUtilityFunction(Object choice, Expression expression, Map<?, ?> betas, BiogemeEncoder encoder){
+	private RegressionModel encodeUtilityFunction(Object choice, Expression expression, Map<?, ?> betas, BiogemeEncoder encoder){
 		declareVariables(expression, encoder);
 
 		List<Feature> features = new ArrayList<>();
@@ -149,10 +211,39 @@ public class DiscreteChoiceModel extends PythonObject {
 			}
 		}
 
-		RegressionTable regressionTable = RegressionModelUtil.createRegressionTable(features, coefficients, intercept)
-			.setTargetCategory(choice);
+		RegressionModel regressionModel = new RegressionModel(MiningFunction.REGRESSION, ModelUtil.createMiningSchema(null), null)
+			.setNormalizationMethod(RegressionModel.NormalizationMethod.NONE)
+			.addRegressionTables(RegressionModelUtil.createRegressionTable(features, coefficients, intercept))
+			.setOutput(ModelUtil.createPredictedOutput(FieldNameUtil.create("utilityFunction", choice), OpType.CONTINUOUS, DataType.DOUBLE, new ExpTransformation()));
 
-		return regressionTable;
+		return regressionModel;
+	}
+
+	static
+	public Field<?> encodeAvailability(Object choice, Expression expression, BiogemeEncoder encoder){
+
+		if(expression instanceof Numeric){
+			Numeric numeric = (Numeric)expression;
+
+			Number value = numeric.getValue();
+			if(value.doubleValue() != 1d){
+				throw new IllegalArgumentException();
+			}
+
+			return null;
+		} else
+
+		if(expression instanceof Variable){
+			Variable variable = (Variable)expression;
+
+			String name = variable.getName();
+
+			return encoder.getField(name);
+		} else
+
+		{
+			throw new IllegalArgumentException();
+		}
 	}
 
 	static
@@ -176,6 +267,23 @@ public class DiscreteChoiceModel extends PythonObject {
 		};
 
 		expression.traverse(function);
+	}
+
+	static
+	public Feature getPredictionFeature(Model model, BiogemeEncoder encoder){
+		Output output = model.getOutput();
+
+		if(output != null && output.hasOutputFields()){
+			List<OutputField> outputFields = output.getOutputFields();
+
+			OutputField outputField = Iterables.getLast(outputFields);
+
+			return new ContinuousFeature(encoder, outputField);
+		} else
+
+		{
+			throw new IllegalArgumentException();
+		}
 	}
 
 	static
