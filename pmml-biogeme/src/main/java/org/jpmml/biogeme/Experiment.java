@@ -59,9 +59,9 @@ import org.jpmml.converter.regression.RegressionModelUtil;
 import org.jpmml.converter.transformations.ExpTransformation;
 import org.jpmml.python.PythonObject;
 
-public class DiscreteChoiceModel extends PythonObject {
+public class Experiment extends PythonObject {
 
-	public DiscreteChoiceModel(){
+	public Experiment(){
 		super("builtins", "dict");
 	}
 

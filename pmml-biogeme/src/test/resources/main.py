@@ -31,14 +31,14 @@ def estimate(model_func):
 		"betas" : results.getBetaValues()
 	}
 
-def predict(proba_func, dcm):
+def predict(proba_func, experiment):
 	prediction = DataFrame()
 
 	choices = list(V.keys())
 
 	for choice in choices:
 		proba = proba_func(choice)
-		prediction["probability({})".format(choice)] = proba.getValue_c(betas = dcm["betas"], database = database, prepareIds = True)
+		prediction["probability({})".format(choice)] = proba.getValue_c(betas = experiment["betas"], database = database, prepareIds = True)
 
 	prediction["Choice"] = [choices[idx] for idx in numpy.argmax(prediction.values, axis = 1)]
 
@@ -50,17 +50,17 @@ def predict(proba_func, dcm):
 
 availability = None
 
-dcm = estimate(lambda: loglogit(V, availability, Choice))
-store_pkl(dcm, "MNLOptima")
+experiment = estimate(lambda: loglogit(V, availability, Choice))
+store_pkl(experiment, "MNLOptima")
 
-prediction = predict(lambda x: logit(V, availability, x), dcm)
+prediction = predict(lambda x: logit(V, availability, x), experiment)
 store_csv(prediction, "MNLOptima")
 
-availability = dcm["model"].av
+availability = experiment["model"].av
 
 availability[1] = Variable("AV_CAR")
 
-store_pkl(dcm, "MNLAvOptima")
+store_pkl(experiment, "MNLAvOptima")
 
-prediction = predict(lambda x: logit(V, availability, x), dcm)
+prediction = predict(lambda x: logit(V, availability, x), experiment)
 store_csv(prediction, "MNLAvOptima")

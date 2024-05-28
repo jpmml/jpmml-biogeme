@@ -24,7 +24,7 @@ import java.util.function.Predicate;
 import com.google.common.base.Equivalence;
 import org.dmg.pmml.PMML;
 import org.jpmml.biogeme.BiogemeEncoder;
-import org.jpmml.biogeme.DiscreteChoiceModel;
+import org.jpmml.biogeme.Experiment;
 import org.jpmml.evaluator.ResultField;
 import org.jpmml.python.testing.PythonEncoderBatch;
 
@@ -45,10 +45,10 @@ public class BiogemeEncoderBatch extends PythonEncoderBatch {
 
 		Map<?, ?> dict = loadPickle(Map.class);
 
-		DiscreteChoiceModel model = new DiscreteChoiceModel();
-		model.update((Map)dict);
+		Experiment experiment = new Experiment();
+		experiment.update((Map)dict);
 
-		PMML pmml = model.encodePMML(encoder);
+		PMML pmml = experiment.encodePMML(encoder);
 
 		validatePMML(pmml);
 

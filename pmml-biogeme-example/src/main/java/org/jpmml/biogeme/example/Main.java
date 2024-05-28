@@ -28,7 +28,7 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import org.dmg.pmml.PMML;
 import org.jpmml.biogeme.BiogemeEncoder;
-import org.jpmml.biogeme.DiscreteChoiceModel;
+import org.jpmml.biogeme.Experiment;
 import org.jpmml.model.metro.MetroJAXBUtil;
 import org.jpmml.python.PickleUtil;
 import org.jpmml.python.Storage;
@@ -114,8 +114,8 @@ public class Main {
 			throw e;
 		}
 
-		DiscreteChoiceModel model = new DiscreteChoiceModel();
-		model.update((Map)dict);
+		Experiment experiment = new Experiment();
+		experiment.update((Map)dict);
 
 		PMML pmml;
 
@@ -123,7 +123,7 @@ public class Main {
 			logger.info("Converting..");
 
 			long begin = System.currentTimeMillis();
-			pmml = model.encodePMML(encoder);
+			pmml = experiment.encodePMML(encoder);
 			long end = System.currentTimeMillis();
 
 			logger.info("Converted in {} ms.", (end - begin));
