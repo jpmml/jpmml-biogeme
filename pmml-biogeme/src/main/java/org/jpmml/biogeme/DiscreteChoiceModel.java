@@ -28,6 +28,7 @@ import java.util.function.Function;
 
 import biogeme.expressions.Beta;
 import biogeme.expressions.Expression;
+import biogeme.expressions.Model;
 import biogeme.expressions.Numeric;
 import biogeme.expressions.Plus;
 import biogeme.expressions.Times;
@@ -39,7 +40,6 @@ import org.dmg.pmml.DerivedField;
 import org.dmg.pmml.Field;
 import org.dmg.pmml.FieldRef;
 import org.dmg.pmml.MiningFunction;
-import org.dmg.pmml.Model;
 import org.dmg.pmml.OpType;
 import org.dmg.pmml.Output;
 import org.dmg.pmml.OutputField;
@@ -66,59 +66,53 @@ public class DiscreteChoiceModel extends PythonObject {
 	}
 
 	public PMML encodePMML(BiogemeEncoder encoder){
-		Map<?, ?> V = getV();
+		Model model = getModel();
 		Map<?, ?> betas = getBetas();
-		Map<?, ?> availability = getAvailability();
 
-		if(availability != null){
+		Map<?, ?> utility = model.getUtil();
+		Map<?, ?> availability = model.getAv();
 
-			if(!Objects.equals(V.keySet(), availability.keySet())){
-				throw new IllegalArgumentException();
-			}
+		if(!Objects.equals(utility.keySet(), availability.keySet())){
+			throw new IllegalArgumentException();
 		}
 
-		List<Object> choices = new ArrayList<>(V.keySet());
+		List<Object> choices = new ArrayList<>(utility.keySet());
 
 		DataField choiceField = encoder.createChoiceField("Choice", choices);
 
-		if(availability != null){
-			(availability.values()).stream()
-				.forEach((value) -> {
+		(availability.values()).stream()
+			.forEach((value) -> {
 
-					if(value instanceof Variable){
-						Variable variable = (Variable)value;
+				if(value instanceof Variable){
+					Variable variable = (Variable)value;
 
-						String name = variable.getName();
+					String name = variable.getName();
 
-						encoder.createAvailabilityField(name);
-					}
-				});
-		}
+					encoder.createAvailabilityField(name);
+				}
+			});
 
 		CategoricalLabel categoricalLabel = new CategoricalLabel(choiceField);
 
-		List<Model> models = new ArrayList<>();
+		List<org.dmg.pmml.Model> models = new ArrayList<>();
 
 		List<RegressionTable> regressionTables = new ArrayList<>();
 
 		for(Object choice : choices){
-			Expression utilityFunctionExpr = (Expression)V.get(choice);
+			Expression utilityExpr = (Expression)utility.get(choice);
+			Expression availabilityExpr = (Expression)availability.get(choice);
 
-			Model model = encodeUtilityFunction(choice, utilityFunctionExpr, betas, encoder);
+			org.dmg.pmml.Model utilityModel = encodeUtility(choice, utilityExpr, betas, encoder);
 
-			models.add(model);
+			models.add(utilityModel);
 
-			Feature feature = getPredictionFeature(model, encoder);
+			Feature feature = getPredictionFeature(utilityModel, encoder);
 
-			if(availability != null){
-				Expression availabilityExpr = (Expression)availability.get(choice);
+			Field<?> availabilityField = encodeAvailability(choice, availabilityExpr, encoder);
+			if(availabilityField != null){
+				Feature availabilityFeature = new ContinuousFeature(encoder, availabilityField);
 
-				Field<?> availabilityField = encodeAvailability(choice, availabilityExpr, encoder);
-				if(availabilityField != null){
-					Feature availabilityFeature = new ContinuousFeature(encoder, availabilityField);
-
-					feature = new InteractionFeature(encoder, FieldNameUtil.create("interaction", availabilityFeature, feature), DataType.DOUBLE, Arrays.asList(availabilityFeature, feature));
-				}
+				feature = new InteractionFeature(encoder, FieldNameUtil.create("interaction", availabilityFeature, feature), DataType.DOUBLE, Arrays.asList(availabilityFeature, feature));
 			}
 
 			RegressionTable regressionTable = RegressionModelUtil.createRegressionTable(Collections.singletonList(feature), Collections.singletonList(1d), null)
@@ -138,20 +132,16 @@ public class DiscreteChoiceModel extends PythonObject {
 		return encoder.encodePMML(miningModel);
 	}
 
-	public Map<?, ?> getV(){
-		return getDict("V");
+	public Model getModel(){
+		return get("model", Model.class);
 	}
 
 	public Map<?, ?> getBetas(){
 		return getDict("betas");
 	}
 
-	public Map<?, ?> getAvailability(){
-		return getOptionalDict("availability");
-	}
-
 	static
-	private RegressionModel encodeUtilityFunction(Object choice, Expression expression, Map<?, ?> betas, BiogemeEncoder encoder){
+	private org.dmg.pmml.Model encodeUtility(Object choice, Expression expression, Map<?, ?> betas, BiogemeEncoder encoder){
 		declareVariables(expression, encoder);
 
 		List<Feature> features = new ArrayList<>();
@@ -270,7 +260,7 @@ public class DiscreteChoiceModel extends PythonObject {
 	}
 
 	static
-	public Feature getPredictionFeature(Model model, BiogemeEncoder encoder){
+	public Feature getPredictionFeature(org.dmg.pmml.Model model, BiogemeEncoder encoder){
 		Output output = model.getOutput();
 
 		if(output != null && output.hasOutputFields()){

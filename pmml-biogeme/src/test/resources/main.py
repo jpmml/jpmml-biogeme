@@ -4,47 +4,41 @@ from biogeme.models import logit, loglogit
 from pandas import DataFrame
 
 import copy
-import joblib
 import numpy
 
-from common import store_csv
+from common import store_csv, store_pkl
 from optima import database, scenario
 
 V, _, Choice, _ = scenario()
 
-# Preserve the initial state of the utility function set for DCM pickling purposes
-V_orig = copy.deepcopy(V)
-
-def store_dcm(V, betas, availability, name):
-	dcm = {
-		"V" : V,
-		"betas" : betas,
-		"availability" : availability
-	}
-
-	joblib.dump(dcm, "pkl/" + name + ".pkl")
-
-def estimate(model_func, name):
+def estimate(model_func):
 	model = model_func()
 
-	biogeme = BIOGEME(database, model)
+	# Make a deep copy of the model object.
+	# The BIOGEME.estimate() method appears to tamper with the utility function set of the model object, making it un-pickleable.
+	model_copy = copy.deepcopy(model)
+
+	biogeme = BIOGEME(database, model_copy)
 	biogeme.generate_html = False
 	biogeme.generate_pickle = False
 	biogeme.saveIterations = False
-	biogeme.modelName = name
+	biogeme.modelName = None
 
 	results = biogeme.estimate()
 
-	return results.getBetaValues()
+	return {
+		"model" : model,
+		"betas" : results.getBetaValues()
+	}
 
-def predict(proba_func, betas):
+def predict(proba_func, dcm):
 	prediction = DataFrame()
 
 	choices = list(V.keys())
 
 	for choice in choices:
 		proba = proba_func(choice)
-		prediction["probability({})".format(choice)] = proba.getValue_c(betas = betas, database = database, prepareIds = True)
+		prediction["probability({})".format(choice)] = proba.getValue_c(betas = dcm["betas"], database = database, prepareIds = True)
 
 	prediction["Choice"] = [choices[idx] for idx in numpy.argmax(prediction.values, axis = 1)]
 
@@ -56,19 +50,17 @@ def predict(proba_func, betas):
 
 availability = None
 
-betas = estimate(lambda: loglogit(V, availability, Choice), "MNLOptima")
-store_dcm(V_orig, betas, availability, "MNLOptima")
+dcm = estimate(lambda: loglogit(V, availability, Choice))
+store_pkl(dcm, "MNLOptima")
 
-prediction = predict(lambda x: logit(V, availability, x), betas)
+prediction = predict(lambda x: logit(V, availability, x), dcm)
 store_csv(prediction, "MNLOptima")
 
-availability = {
-	0 : Numeric(1),
-	1 : Variable("AV_CAR"),
-	2 : Numeric(1)
-}
+availability = dcm["model"].av
 
-store_dcm(V_orig, betas, availability, "MNLAvOptima")
+availability[1] = Variable("AV_CAR")
 
-prediction = predict(lambda x: logit(V, availability, x), betas)
+store_pkl(dcm, "MNLAvOptima")
+
+prediction = predict(lambda x: logit(V, availability, x), dcm)
 store_csv(prediction, "MNLAvOptima")

@@ -123,6 +123,8 @@ def scenario(
 	nests = NestsForNestedLogit(choice_set = list(V), tuple_of_nests = (no_car_nest,))
 	return V, nests, Choice, marginal_cost_scenario
 
+numpy.random.seed(seed = 13)
+
 df["AV_CAR"] = numpy.random.choice([0, 1], size = df.shape[0])
 
 store_csv(df, "Optima")
