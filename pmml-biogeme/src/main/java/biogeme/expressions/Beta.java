@@ -21,7 +21,6 @@ package biogeme.expressions;
 import java.util.Arrays;
 import java.util.Map;
 
-import numpy.core.ScalarUtil;
 import org.dmg.pmml.FieldRef;
 
 public class Beta extends ElementaryExpression {
@@ -43,7 +42,7 @@ public class Beta extends ElementaryExpression {
 		return super.toPMML();
 	}
 
-	public Number getValue(Map<?, ?> betas){
+	public Number getValue(Map<String, ? extends Number> betas){
 		Integer status = getStatus();
 
 		switch(status){
@@ -51,7 +50,7 @@ public class Beta extends ElementaryExpression {
 				{
 					String name = getName();
 
-					Number value = (Number)ScalarUtil.decode(betas.get(name));
+					Number value = betas.get(name);
 					if(value == null){
 						throw new IllegalArgumentException(name);
 					}

@@ -33,6 +33,7 @@ import biogeme.expressions.Numeric;
 import biogeme.expressions.Plus;
 import biogeme.expressions.Times;
 import biogeme.expressions.Variable;
+import biogeme.results.Results;
 import com.google.common.collect.Iterables;
 import org.dmg.pmml.DataField;
 import org.dmg.pmml.DataType;
@@ -67,10 +68,12 @@ public class Experiment extends PythonObject {
 
 	public PMML encodePMML(BiogemeEncoder encoder){
 		Model model = getModel();
-		Map<?, ?> betas = getBetas();
+		Results results = getResults();
 
 		Map<?, ?> utility = model.getUtil();
 		Map<?, ?> availability = model.getAv();
+
+		Map<String, Number> betas = results.getBetas();
 
 		if(!Objects.equals(utility.keySet(), availability.keySet())){
 			throw new IllegalArgumentException();
@@ -136,12 +139,12 @@ public class Experiment extends PythonObject {
 		return get("model", Model.class);
 	}
 
-	public Map<?, ?> getBetas(){
-		return getDict("betas");
+	public Results getResults(){
+		return get("results", Results.class);
 	}
 
 	static
-	private org.dmg.pmml.Model encodeUtility(Object choice, Expression expression, Map<?, ?> betas, BiogemeEncoder encoder){
+	private org.dmg.pmml.Model encodeUtility(Object choice, Expression expression, Map<String, ? extends Number> betas, BiogemeEncoder encoder){
 		declareVariables(expression, encoder);
 
 		List<Feature> features = new ArrayList<>();

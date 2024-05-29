@@ -28,17 +28,19 @@ def estimate(model_func):
 
 	return {
 		"model" : model,
-		"betas" : results.getBetaValues()
+		"results" : results
 	}
 
 def predict(proba_func, experiment):
+	betas = experiment["results"].getBetaValues()
+
 	prediction = DataFrame()
 
 	choices = list(V.keys())
 
 	for choice in choices:
 		proba = proba_func(choice)
-		prediction["probability({})".format(choice)] = proba.getValue_c(betas = experiment["betas"], database = database, prepareIds = True)
+		prediction["probability({})".format(choice)] = proba.getValue_c(betas = betas, database = database, prepareIds = True)
 
 	prediction["Choice"] = [choices[idx] for idx in numpy.argmax(prediction.values, axis = 1)]
 
