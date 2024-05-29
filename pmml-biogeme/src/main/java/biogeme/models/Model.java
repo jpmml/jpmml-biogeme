@@ -16,11 +16,24 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with JPMML-Biogeme.  If not, see <http://www.gnu.org/licenses/>.
  */
-package biogeme.expressions;
+package biogeme.models;
 
-public class LogLogit extends Model {
+import java.util.Map;
 
-	public LogLogit(String module, String name){
+import org.jpmml.python.PythonObject;
+
+abstract
+public class Model extends PythonObject {
+
+	public Model(String module, String name){
 		super(module, name);
+	}
+
+	public Map<?, ?> getAv(){
+		return getDict("av");
+	}
+
+	public Map<?, ?> getUtil(){
+		return getDict("util");
 	}
 }

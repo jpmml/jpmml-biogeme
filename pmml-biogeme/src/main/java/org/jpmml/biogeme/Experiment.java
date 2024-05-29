@@ -28,11 +28,11 @@ import java.util.function.Function;
 
 import biogeme.expressions.Beta;
 import biogeme.expressions.Expression;
-import biogeme.expressions.Model;
 import biogeme.expressions.Numeric;
 import biogeme.expressions.Plus;
 import biogeme.expressions.Times;
 import biogeme.expressions.Variable;
+import biogeme.models.Model;
 import biogeme.results.Results;
 import com.google.common.collect.Iterables;
 import org.dmg.pmml.DataField;
