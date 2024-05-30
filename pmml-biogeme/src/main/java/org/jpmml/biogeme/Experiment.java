@@ -28,6 +28,7 @@ import java.util.function.Function;
 
 import biogeme.expressions.Beta;
 import biogeme.expressions.Expression;
+import biogeme.expressions.Minus;
 import biogeme.expressions.Numeric;
 import biogeme.expressions.Plus;
 import biogeme.expressions.Times;
@@ -40,6 +41,7 @@ import org.dmg.pmml.DataType;
 import org.dmg.pmml.DerivedField;
 import org.dmg.pmml.Field;
 import org.dmg.pmml.FieldRef;
+import org.dmg.pmml.MathContext;
 import org.dmg.pmml.MiningFunction;
 import org.dmg.pmml.OpType;
 import org.dmg.pmml.Output;
@@ -56,6 +58,7 @@ import org.jpmml.converter.Feature;
 import org.jpmml.converter.FieldNameUtil;
 import org.jpmml.converter.InteractionFeature;
 import org.jpmml.converter.ModelUtil;
+import org.jpmml.converter.ValueUtil;
 import org.jpmml.converter.mining.MiningModelUtil;
 import org.jpmml.converter.regression.RegressionModelUtil;
 import org.jpmml.converter.transformations.ExpTransformation;
@@ -151,7 +154,7 @@ public class Experiment extends PythonObject {
 		List<Feature> features = new ArrayList<>();
 		List<Number> coefficients = new ArrayList<>();
 
-		encodeTerm(choice, expression, betas, features, coefficients, encoder);
+		encodeTerm(choice, expression, Experiment.SIGN_PLUS, betas, features, coefficients, encoder);
 
 		RegressionModel regressionModel = new RegressionModel(MiningFunction.REGRESSION, ModelUtil.createMiningSchema(null), null)
 			.setNormalizationMethod(RegressionModel.NormalizationMethod.NONE)
@@ -162,7 +165,17 @@ public class Experiment extends PythonObject {
 	}
 
 	static
-	private void encodeTerm(Object choice, Expression expression, Map<String, ? extends Number> betas, List<Feature> features, List<Number> coefficients, BiogemeEncoder encoder){
+	private void encodeTerm(Object choice, Expression expression, int sign, Map<String, ? extends Number> betas, List<Feature> features, List<Number> coefficients, BiogemeEncoder encoder){
+
+		if(expression instanceof Minus){
+			Minus minus = (Minus)expression;
+
+			Expression left = minus.getLeft();
+			Expression right = minus.getRight();
+
+			encodeTerm(choice, left, Experiment.SIGN_PLUS, betas, features, coefficients, encoder);
+			encodeTerm(choice, right, Experiment.SIGN_MINUS, betas, features, coefficients, encoder);
+		} else
 
 		if(expression instanceof Plus){
 			Plus plus = (Plus)expression;
@@ -170,8 +183,8 @@ public class Experiment extends PythonObject {
 			Expression left = plus.getLeft();
 			Expression right = plus.getRight();
 
-			encodeTerm(choice, left, betas, features, coefficients, encoder);
-			encodeTerm(choice, right, betas, features, coefficients, encoder);
+			encodeTerm(choice, left, Experiment.SIGN_PLUS, betas, features, coefficients, encoder);
+			encodeTerm(choice, right, Experiment.SIGN_PLUS, betas, features, coefficients, encoder);
 		} else
 
 		{
@@ -183,7 +196,7 @@ public class Experiment extends PythonObject {
 
 				feature = new ConstantFeature(encoder, beta.getValue(betas));
 
-				coefficient = 1d;
+				coefficient = sign;
 			} else
 
 			{
@@ -208,11 +221,11 @@ public class Experiment extends PythonObject {
 				} // End if
 
 				if(beta != null){
-					coefficient = beta.getValue(betas);
+					coefficient = ValueUtil.multiply(MathContext.DOUBLE, sign, beta.getValue(betas));
 				} else
 
 				{
-					coefficient = 1d;
+					coefficient = sign;
 				}
 			}
 
@@ -326,4 +339,7 @@ public class Experiment extends PythonObject {
 
 		return null;
 	}
+
+	private static final int SIGN_PLUS = 1;
+	private static final int SIGN_MINUS = -1;
 }
