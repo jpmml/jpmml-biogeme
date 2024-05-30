@@ -50,6 +50,7 @@ import org.dmg.pmml.mining.Segmentation;
 import org.dmg.pmml.regression.RegressionModel;
 import org.dmg.pmml.regression.RegressionTable;
 import org.jpmml.converter.CategoricalLabel;
+import org.jpmml.converter.ConstantFeature;
 import org.jpmml.converter.ContinuousFeature;
 import org.jpmml.converter.Feature;
 import org.jpmml.converter.FieldNameUtil;
@@ -149,28 +150,46 @@ public class Experiment extends PythonObject {
 
 		List<Feature> features = new ArrayList<>();
 		List<Number> coefficients = new ArrayList<>();
-		Number intercept = null;
 
-		List<Expression> terms = extractTerms(expression);
-		for(int i = 0; i < terms.size(); i++){
-			Expression term = terms.get(i);
+		encodeTerm(choice, expression, betas, features, coefficients, encoder);
 
-			if(term instanceof Beta){
-				Beta beta = (Beta)term;
+		RegressionModel regressionModel = new RegressionModel(MiningFunction.REGRESSION, ModelUtil.createMiningSchema(null), null)
+			.setNormalizationMethod(RegressionModel.NormalizationMethod.NONE)
+			.addRegressionTables(RegressionModelUtil.createRegressionTable(features, coefficients, null))
+			.setOutput(ModelUtil.createPredictedOutput(FieldNameUtil.create("utility", choice), OpType.CONTINUOUS, DataType.DOUBLE, new ExpTransformation()));
 
-				if(intercept != null){
-					throw new IllegalArgumentException();
-				}
+		return regressionModel;
+	}
 
-				intercept = beta.getValue(betas);
+	static
+	private void encodeTerm(Object choice, Expression expression, Map<String, ? extends Number> betas, List<Feature> features, List<Number> coefficients, BiogemeEncoder encoder){
+
+		if(expression instanceof Plus){
+			Plus plus = (Plus)expression;
+
+			Expression left = plus.getLeft();
+			Expression right = plus.getRight();
+
+			encodeTerm(choice, left, betas, features, coefficients, encoder);
+			encodeTerm(choice, right, betas, features, coefficients, encoder);
+		} else
+
+		{
+			Feature feature;
+			Number coefficient;
+
+			if(expression instanceof Beta){
+				Beta beta = (Beta)expression;
+
+				feature = new ConstantFeature(encoder, beta.getValue(betas));
+
+				coefficient = 1d;
 			} else
 
 			{
-				Beta beta = extractBeta(term);
+				Beta beta = extractBeta(expression);
 
-				Feature feature;
-
-				org.dmg.pmml.Expression pmmlExpression = term.toPMML();
+				org.dmg.pmml.Expression pmmlExpression = expression.toPMML();
 
 				if(pmmlExpression instanceof FieldRef){
 					FieldRef fieldRef = (FieldRef)pmmlExpression;
@@ -181,16 +200,12 @@ public class Experiment extends PythonObject {
 				} else
 
 				{
-					String name = FieldNameUtil.create("term", choice, i);
+					String name = FieldNameUtil.create("term", choice, features.size());
 
 					DerivedField derivedField = encoder.createDerivedField(name, OpType.CONTINUOUS, DataType.DOUBLE, pmmlExpression);
 
 					feature = new ContinuousFeature(encoder, derivedField);
-				}
-
-				features.add(feature);
-
-				Number coefficient;
+				} // End if
 
 				if(beta != null){
 					coefficient = beta.getValue(betas);
@@ -199,17 +214,11 @@ public class Experiment extends PythonObject {
 				{
 					coefficient = 1d;
 				}
-
-				coefficients.add(coefficient);
 			}
+
+			features.add(feature);
+			coefficients.add(coefficient);
 		}
-
-		RegressionModel regressionModel = new RegressionModel(MiningFunction.REGRESSION, ModelUtil.createMiningSchema(null), null)
-			.setNormalizationMethod(RegressionModel.NormalizationMethod.NONE)
-			.addRegressionTables(RegressionModelUtil.createRegressionTable(features, coefficients, intercept))
-			.setOutput(ModelUtil.createPredictedOutput(FieldNameUtil.create("utilityFunction", choice), OpType.CONTINUOUS, DataType.DOUBLE, new ExpTransformation()));
-
-		return regressionModel;
 	}
 
 	static
@@ -277,26 +286,6 @@ public class Experiment extends PythonObject {
 		{
 			throw new IllegalArgumentException();
 		}
-	}
-
-	static
-	private List<Expression> extractTerms(Expression expression){
-
-		if(expression instanceof Plus){
-			Plus plus = (Plus)expression;
-
-			Expression left = plus.getLeft();
-			Expression right = plus.getRight();
-
-			List<Expression> result = new ArrayList<>();
-
-			result.addAll(extractTerms(left));
-			result.addAll(extractTerms(right));
-
-			return result;
-		}
-
-		return Collections.singletonList(expression);
 	}
 
 	static
