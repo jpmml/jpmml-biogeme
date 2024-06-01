@@ -62,6 +62,8 @@ availability = experiment["model"].av
 
 availability[1] = Variable("AV_CAR")
 
+experiment["model"] = loglogit(V, availability, Choice)
+
 store_pkl(experiment, "MNLAvOptima")
 
 prediction = predict(lambda x: logit(V, availability, x), experiment)
